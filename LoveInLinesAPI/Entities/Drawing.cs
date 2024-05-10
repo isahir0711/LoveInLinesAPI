@@ -14,5 +14,12 @@ namespace LoveInLinesAPI.Entities
 
         [Column("total_likes")]
         public int TotalLikes { get; set; }
+
+        [Column("user_id")]
+        public string UserId { get; set; }
+        
+        [Column("user_profile_pic")]
+        public string UserProfilePic { get; set; }
+
     }
 }

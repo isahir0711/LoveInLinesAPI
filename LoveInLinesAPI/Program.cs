@@ -1,11 +1,13 @@
 using LoveInLinesAPI.DTOs;
 using LoveInLinesAPI.Entities;
 using LoveInLinesAPI.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json.Linq;
 using Supabase;
 using System.Net.Http;
 using System.Security.Claims;
@@ -101,14 +103,21 @@ app.MapPost("api/uploadImage", async ([FromForm] IFormFile File,
 {
     try
     {
-        if (File == null) return Results.BadRequest();
+        if (File == null) return Results.BadRequest("There was an error with your drawing");
 
         var imageuri = await supaFileService.UploadFile(File);
+
+        string token = await context.GetTokenAsync("access_token");
+        var user = await supaClient.Auth.GetUser(token);
+
+        if (user == null) { return Results.BadRequest("There's an issue with your account"); }
 
         var drawing = new Drawing
         {
             ImageURL = imageuri,
-            TotalLikes = 0
+            TotalLikes = 0,
+            UserId = user.Id,
+            UserProfilePic = user.UserMetadata["avatar_url"].ToString()
         };
 
         await supaClient.From<Drawing>().Insert(drawing);
@@ -122,6 +131,7 @@ app.MapPost("api/uploadImage", async ([FromForm] IFormFile File,
         Console.WriteLine(ex.Message.ToString());
         throw;
     }
+
 
 }).DisableAntiforgery().RequireAuthorization();
 
@@ -138,11 +148,13 @@ app.MapGet("api/getDrawings", async ([FromServices] Supabase.Client supaClient) 
         var drawing_response = new List<DrawingResponse>();
 
         foreach (var drawing in drawings)
-        {
+        { 
+
             var temp = new DrawingResponse
             {
                 DrawingURL = drawing.ImageURL,
-                TotalLikes = drawing.TotalLikes
+                TotalLikes = drawing.TotalLikes,
+                UserProfilePic = drawing.UserProfilePic
             };
             drawing_response.Add(temp);
         }
@@ -166,18 +178,22 @@ app.MapGet("api/SignInGithub", async (Supabase.Client supaclient) =>
 
 app.MapGet("api/SignInGoogle", async (Supabase.Client supaclient) =>
 {
-    var signInUrl = supaclient.Auth.SignIn(Provider.Spotify);
+    var signInUrl = supaclient.Auth.SignIn(Provider.Google);
 
     return signInUrl.Result.Uri;
 });
 
 
-app.MapGet("api/GetSession", (Supabase.Client supaclient,HttpContext context) =>
+app.MapGet("api/GetSession", async (Supabase.Client supaclient,HttpContext context) =>
 {
     //the context has a auth parameter, use this to validate the required auth endpoints (ex: upload, like drawing, etc)
     Console.WriteLine(context);
-    return supaclient.Auth.CurrentSession;
-});
+    string token = await context.GetTokenAsync("access_token");
+    var user = await supaclient.Auth.GetUser(token);
+    var metadata = user.UserMetadata;
+    var image = metadata["avatar_url"].ToString();
+    return Results.Ok(user);
+}).RequireAuthorization();
 
 
 
