@@ -18,7 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddTransient<ISupaFileService, SupaFileService>();
 
-builder.Services.AddSingleton<Supabase.Client>(_ =>
+builder.Services.AddScoped<Supabase.Client>(_ =>
     new Supabase.Client(
     Environment.GetEnvironmentVariable("supabaseloveurl"),
     Environment.GetEnvironmentVariable("supabaseapikey"),
@@ -68,6 +68,14 @@ builder.Services.AddCors(options =>
                      });
 });
 
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("Authenticated", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+    });
+});
+
 var app = builder.Build();
 
 app.UseAuthentication();
@@ -89,7 +97,7 @@ string GenerateRoomId()
 
 app.MapPost("api/uploadImage", async ([FromForm] IFormFile File,
     [FromServices] ISupaFileService supaFileService,
-    [FromServices] Supabase.Client supaClient) =>
+    [FromServices] Supabase.Client supaClient, HttpContext context) =>
 {
     try
     {
@@ -104,8 +112,9 @@ app.MapPost("api/uploadImage", async ([FromForm] IFormFile File,
         };
 
         await supaClient.From<Drawing>().Insert(drawing);
-
         return Results.Ok(drawing.ImageURL);
+
+
     }
     catch (Exception ex)
     {
@@ -114,7 +123,9 @@ app.MapPost("api/uploadImage", async ([FromForm] IFormFile File,
         throw;
     }
 
-}).DisableAntiforgery();
+}).DisableAntiforgery().RequireAuthorization();
+
+
 
 app.MapGet("api/getDrawings", async ([FromServices] Supabase.Client supaClient) =>
 {
@@ -155,7 +166,7 @@ app.MapGet("api/SignInGithub", async (Supabase.Client supaclient) =>
 
 app.MapGet("api/SignInGoogle", async (Supabase.Client supaclient) =>
 {
-    var signInUrl = supaclient.Auth.SignIn(Provider.Google);
+    var signInUrl = supaclient.Auth.SignIn(Provider.Spotify);
 
     return signInUrl.Result.Uri;
 });
@@ -184,9 +195,12 @@ app.MapPost("api/CallBackURI", async (CallbackRequest callbackRequest, Supabase.
         ExpiresAt = session.ExpiresAt()
     };
 
+
     return Results.Ok(authRes);
 });
 
+
+app.UseAuthorization();
 
 app.UseCors("corsPolicy");
 
