@@ -152,6 +152,7 @@ app.MapGet("api/getDrawings", async ([FromServices] Supabase.Client supaClient) 
 
             var temp = new DrawingResponse
             {
+                Id = drawing.Id,
                 DrawingURL = drawing.ImageURL,
                 TotalLikes = drawing.TotalLikes,
                 UserProfilePic = drawing.UserProfilePic
@@ -160,6 +161,37 @@ app.MapGet("api/getDrawings", async ([FromServices] Supabase.Client supaClient) 
         }
 
         return drawing_response;
+    }
+    catch (Exception ex)
+    {
+        System.Diagnostics.Trace.TraceInformation($"{ex.Message}");
+        Console.WriteLine($"{ex.Message}");
+        throw;
+    }
+}).DisableAntiforgery();
+
+app.MapGet("api/drawings/{id}", async (int id,[FromServices] Supabase.Client supaClient) =>
+{
+    try
+    {
+        var response = await supaClient.From<Drawing>().Where(d=> d.Id == id).Get();
+
+        var drawing = response.Models.FirstOrDefault();
+
+        if (drawing is null)
+        {
+            return Results.NotFound();
+        }
+
+        var drawingResponse = new DrawingResponse
+        {
+            Id = drawing.Id,
+            DrawingURL = drawing.ImageURL,
+            TotalLikes = drawing.TotalLikes,
+            UserProfilePic = drawing.UserProfilePic
+        };
+
+        return Results.Ok(drawingResponse);
     }
     catch (Exception ex)
     {
